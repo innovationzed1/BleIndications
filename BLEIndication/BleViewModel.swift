@@ -48,8 +48,8 @@ class BleViewModel: NSObject, ObservableObject {
     private let restoreIdentifier = "someuniquevalue"
     
     // Target service and characteristic UUIDs
-    private let targetServiceUUID = CBUUID(string: "1ace5966-d918-451f-a7bd-b04d8533a219")
-    private let targetCharacteristicUUID = CBUUID(string: "d8be3fb7-6244-4f13-803d-ce083fd9d89e")
+    nonisolated private let targetServiceUUID = CBUUID(string: "1ace5966-d918-451f-a7bd-b04d8533a219")
+    nonisolated private let targetCharacteristicUUID = CBUUID(string: "d8be3fb7-6244-4f13-803d-ce083fd9d89e")
     
     // UserDefaults key for persisting connected peripherals
     private let persistedPeripheralsKey = "PersistedPeripherals"
