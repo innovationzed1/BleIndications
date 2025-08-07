@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Foundation
+import CoreBluetooth
 
 // MARK: - Connection State Extensions
 extension ConnectionState {
@@ -67,5 +68,24 @@ extension UUID {
     var shortString: String {
         let uuidString = self.uuidString
         return String(uuidString.prefix(8))
+    }
+}
+
+// MARK: - CBCharacteristicProperties Extensions
+extension CBCharacteristicProperties {
+    var description: String {
+        var properties: [String] = []
+        
+        if contains(.read) { properties.append("read") }
+        if contains(.write) { properties.append("write") }
+        if contains(.writeWithoutResponse) { properties.append("writeWithoutResponse") }
+        if contains(.notify) { properties.append("notify") }
+        if contains(.indicate) { properties.append("indicate") }
+        if contains(.authenticatedSignedWrites) { properties.append("authenticatedSignedWrites") }
+        if contains(.extendedProperties) { properties.append("extendedProperties") }
+        if contains(.notifyEncryptionRequired) { properties.append("notifyEncryptionRequired") }
+        if contains(.indicateEncryptionRequired) { properties.append("indicateEncryptionRequired") }
+        
+        return properties.isEmpty ? "none" : properties.joined(separator: ", ")
     }
 }
