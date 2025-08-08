@@ -1,0 +1,37 @@
+[2025-08-08 15:47:32.270] Auto Increment: 1926 Type: Injection
+[2025-08-08 15:47:32.329] Auto Increment: 0 Type: Unknown
+Device disconnected
+Starting service discovery...
+Found target characteristic! Enabling indications...
+read, write, indicate
+[2025-08-08 15:48:03.459] Auto Increment: 1931 Type: Injection
+Successfully enabled indications for target characteristic
+[2025-08-08 15:48:03.666] Auto Increment: 1932 Type: Injection
+[2025-08-08 15:48:03.726] Auto Increment: 1933 Type: Injection
+[2025-08-08 15:48:03.787] Auto Increment: 1934 Type: Injection
+[2025-08-08 15:48:03.849] Auto Increment: 1935 Type: Injection
+[2025-08-08 15:48:03.906] Auto Increment: 1936 Type: Injection
+[2025-08-08 15:48:03.996] Auto Increment: 1937 Type: Logging
+[2025-08-08 15:48:04.056] Auto Increment: 0 Type: Unknown
+Device disconnected
+Starting service discovery...
+Found target characteristic! Enabling indications...
+read, write, indicate
+[2025-08-08 15:48:59.057] Auto Increment: 1944 Type: Injection
+Successfully enabled indications for target characteristic
+[2025-08-08 15:48:59.115] Auto Increment: 1945 Type: Injection
+[2025-08-08 15:48:59.176] Auto Increment: 1946 Type: Injection
+[2025-08-08 15:48:59.237] Auto Increment: 1947 Type: Injection
+[2025-08-08 15:48:59.295] Auto Increment: 1948 Type: Injection
+[2025-08-08 15:48:59.355] Auto Increment: 1949 Type: Logging
+[2025-08-08 15:48:59.415] Auto Increment: 0 Type: Unknown
+Device disconnected
+Starting service discovery...
+Found target characteristic! Enabling indications...
+read, write, indicate
+[2025-08-08 15:49:33.736] Auto Increment: 1957 Type: Injection
+Successfully enabled indications for target characteristic
+[2025-08-08 15:49:33.797] Auto Increment: 1958 Type: Injection
+[2025-08-08 15:49:34.035] Auto Increment: 1959 Type: Injection
+[2025-08-08 15:49:34.128] Auto Increment: 1960 Type: Logging
+[2025-08-08 15:49:34.245] Auto Increment: 0 Type: Unknown

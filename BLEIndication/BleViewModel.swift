@@ -45,29 +45,27 @@ class BleViewModel: NSObject, ObservableObject {
     private var connectedPeripherals: [UUID: CBPeripheral] = [:]
     private var discoveredPeripherals: [UUID: CBPeripheral] = [:]
     private var userDisconnectedPeripherals: Set<UUID> = []
-    private let restoreIdentifier = "someuniquevalue"
     
-    // Target service and characteristic UUIDs
     nonisolated private let targetServiceUUID = CBUUID(string: "1ace5966-d918-451f-a7bd-b04d8533a219")
     nonisolated private let targetCharacteristicUUID = CBUUID(string: "d8be3fb7-6244-4f13-803d-ce083fd9d89e")
-    
-    // UserDefaults key for persisting connected peripherals
-//    private let persistedPeripheralsKey = "PersistedPeripherals"
+    nonisolated private let timestampFormatter: DateFormatter = {
+      let df = DateFormatter()
+      df.locale   = Locale(identifier: "en_US_POSIX")
+      df.timeZone = TimeZone(secondsFromGMT: 0)
+      df.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+      return df
+    }()
+
     
     override init() {
         super.init()
-        
-        let options: [String: Any] = [
-            CBCentralManagerOptionRestoreIdentifierKey: restoreIdentifier
-        ]
-        
+
+        // use main queue together with @MainActor so everything is done in the same UI thread pool
         centralManager = CBCentralManager(
             delegate: self,
-            queue: DispatchQueue.main,
-            options: options
+            queue: DispatchQueue.main
         )
-        
-//        loadPersistedPeripherals()
+    
     }
     
     // MARK: - Public Methods
@@ -155,11 +153,6 @@ class BleViewModel: NSObject, ObservableObject {
         alertMessage = message
         showAlert = true
     }
-    
-    private func isIzdoseDevice(_ name: String?) -> Bool {
-        guard let name = name else { return false }
-        return name.lowercased().contains("izdose")
-    }
 }
 
 // MARK: - CBCentralManagerDelegate
@@ -246,37 +239,11 @@ extension BleViewModel: CBCentralManagerDelegate {
             connectedPeripherals.removeValue(forKey: peripheral.identifier)
             updatePeripheralState(peripheral.identifier, to: .disconnected)
             
+            // if the device was not explicitly disconnected by the user imidietly start connection sohe system notice this when device nearby again
             if shouldReconnect(peripheral) {
                 discoveredPeripherals[peripheral.identifier] = peripheral
                 print("Device disconnected")
                 centralManager.connect(peripheral, options: nil)
-            }
-        }
-    }
-    
-    nonisolated func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
-        Task { @MainActor in
-            if let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
-                for peripheral in peripherals {
-                    if peripheral.state == .connected {
-                        connectedPeripherals[peripheral.identifier] = peripheral
-                        peripheral.delegate = self
-                        
-                        let name = peripheral.name ?? "Unknown Device"
-                        if name.lowercased().contains("izdose") {
-                            addOrUpdatePeripheral(
-                                id: peripheral.identifier,
-                                name: name,
-                                rssi: -50,
-                                state: .connected
-                            )
-                        }
-                    }
-                }
-            }
-            
-            if dict[CBCentralManagerRestoredStateScanServicesKey] != nil {
-                startScanning()
             }
         }
     }
@@ -334,6 +301,7 @@ extension BleViewModel: CBPeripheralDelegate {
         }
     }
     
+    // the problem is here this delegate is ready to deal with data way too late. device already started sending indications 
     nonisolated func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
             print("Error reading characteristic value: \(error.localizedDescription)")
@@ -346,9 +314,12 @@ extension BleViewModel: CBPeripheralDelegate {
                 formatter.timeStyle = .medium
                 formatter.dateStyle = .none
                 
+                // data filtering since device is sending some other events sometims
                 if data.count >= 15 {
                   let event = decodeBytes(bytes: data)
-                  print("Auto Increment: \(event.autoIncrement) Type: \(event.type)")
+                  let now = Date()
+                  let timestamp = timestampFormatter.string(from: now)
+                  print("[\(timestamp)] Auto Increment: \(event.autoIncrement) Type: \(event.type)")
                 }
                 
             } else {
