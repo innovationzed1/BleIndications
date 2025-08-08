@@ -52,7 +52,7 @@ class BleViewModel: NSObject, ObservableObject {
     nonisolated private let targetCharacteristicUUID = CBUUID(string: "d8be3fb7-6244-4f13-803d-ce083fd9d89e")
     
     // UserDefaults key for persisting connected peripherals
-    private let persistedPeripheralsKey = "PersistedPeripherals"
+//    private let persistedPeripheralsKey = "PersistedPeripherals"
     
     override init() {
         super.init()
@@ -63,11 +63,11 @@ class BleViewModel: NSObject, ObservableObject {
         
         centralManager = CBCentralManager(
             delegate: self,
-            queue: DispatchQueue.global(qos: .userInitiated),
+            queue: DispatchQueue.main,
             options: options
         )
         
-        loadPersistedPeripherals()
+//        loadPersistedPeripherals()
     }
     
     // MARK: - Public Methods
@@ -148,39 +148,7 @@ class BleViewModel: NSObject, ObservableObject {
     }
     
     private func shouldReconnect(_ peripheral: CBPeripheral) -> Bool {
-        // Only reconnect if user didn't explicitly disconnect
         return !userDisconnectedPeripherals.contains(peripheral.identifier)
-    }
-    
-    private func savePersistedPeripherals() {
-        let connectedIds = Array(connectedPeripherals.keys).map { $0.uuidString }
-        UserDefaults.standard.set(connectedIds, forKey: persistedPeripheralsKey)
-    }
-    
-    private func loadPersistedPeripherals() {
-        guard let savedIds = UserDefaults.standard.array(forKey: persistedPeripheralsKey) as? [String] else {
-            return
-        }
-        
-        let uuids = savedIds.compactMap { UUID(uuidString: $0) }
-        let peripherals = centralManager?.retrievePeripherals(withIdentifiers: uuids) ?? []
-        
-        for peripheral in peripherals {
-            if peripheral.state == .connected {
-                connectedPeripherals[peripheral.identifier] = peripheral
-                peripheral.delegate = self
-                
-                let name = peripheral.name ?? "Unknown Device"
-                if name.lowercased().contains("izdose") {
-                    addOrUpdatePeripheral(
-                        id: peripheral.identifier,
-                        name: name,
-                        rssi: -50,
-                        state: .connected
-                    )
-                }
-            }
-        }
     }
     
     private func showError(_ message: String) {
@@ -198,30 +166,29 @@ class BleViewModel: NSObject, ObservableObject {
 extension BleViewModel: CBCentralManagerDelegate {
     nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
         Task { @MainActor in
-            self.bluetoothState = central.state
-            
+            bluetoothState = central.state
+
             switch central.state {
             case .poweredOn:
                 print("Bluetooth powered on")
-                
+
             case .poweredOff:
-                self.showError("Bluetooth is turned off. Please enable Bluetooth in Settings.")
-                
+                showError("Bluetooth is turned off. Please enable Bluetooth in Settings.")
+
             case .unauthorized:
-                self.showError("Bluetooth access denied. Please enable Bluetooth permissions in Settings.")
-                
+                showError("Bluetooth access denied. Please enable Bluetooth permissions in Settings.")
+
             case .unsupported:
-                self.showError("Bluetooth Low Energy is not supported on this device.")
-                
+                showError("Bluetooth Low Energy is not supported on this device.")
+
             case .resetting:
                 print("Bluetooth is resetting. Please wait...")
-                // Don't show error for resetting as it's temporary
-                
+
             case .unknown:
-                self.showError("Bluetooth state is unknown. Please try again.")
-                
+                showError("Bluetooth state is unknown. Please try again.")
+
             @unknown default:
-                self.showError("Unknown Bluetooth state.")
+                showError("Unknown Bluetooth state.")
             }
         }
     }
@@ -233,16 +200,13 @@ extension BleViewModel: CBCentralManagerDelegate {
         rssi RSSI: NSNumber
     ) {
         let peripheralName = peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Unknown Device"
-        
-        // Check if device name contains "izdose" (case-insensitive)
         guard peripheralName.lowercased().contains("izdose") else { return }
         
         Task { @MainActor in
-            // Store peripheral reference to prevent deallocation
-            self.discoveredPeripherals[peripheral.identifier] = peripheral
+            discoveredPeripherals[peripheral.identifier] = peripheral
             
-            let state: ConnectionState = self.connectedPeripherals[peripheral.identifier] != nil ? .connected : .disconnected
-            self.addOrUpdatePeripheral(
+            let state: ConnectionState = connectedPeripherals[peripheral.identifier] != nil ? .connected : .disconnected
+            addOrUpdatePeripheral(
                 id: peripheral.identifier,
                 name: peripheralName,
                 rssi: RSSI.intValue,
@@ -253,10 +217,9 @@ extension BleViewModel: CBCentralManagerDelegate {
     
     nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         Task { @MainActor in
-            self.connectedPeripherals[peripheral.identifier] = peripheral
+            connectedPeripherals[peripheral.identifier] = peripheral
             peripheral.delegate = self
-            self.updatePeripheralState(peripheral.identifier, to: .connected)
-            self.savePersistedPeripherals()
+            updatePeripheralState(peripheral.identifier, to: .connected)
                 
             print("Starting service discovery...")
             peripheral.discoverServices(nil)
@@ -265,7 +228,7 @@ extension BleViewModel: CBCentralManagerDelegate {
     
     nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         Task { @MainActor in
-            self.updatePeripheralState(peripheral.identifier, to: .disconnected)
+            updatePeripheralState(peripheral.identifier, to: .disconnected)
             let peripheralName = peripheral.name ?? "Unknown Device"
             
             if let error = error {
@@ -280,14 +243,13 @@ extension BleViewModel: CBCentralManagerDelegate {
     
     nonisolated func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         Task { @MainActor in
-            self.connectedPeripherals.removeValue(forKey: peripheral.identifier)
-            self.updatePeripheralState(peripheral.identifier, to: .disconnected)
-            self.savePersistedPeripherals()
+            connectedPeripherals.removeValue(forKey: peripheral.identifier)
+            updatePeripheralState(peripheral.identifier, to: .disconnected)
             
-            if self.shouldReconnect(peripheral) {
-                self.discoveredPeripherals[peripheral.identifier] = peripheral
+            if shouldReconnect(peripheral) {
+                discoveredPeripherals[peripheral.identifier] = peripheral
                 print("Device disconnected")
-                self.centralManager.connect(peripheral, options: nil)
+                centralManager.connect(peripheral, options: nil)
             }
         }
     }
@@ -297,12 +259,12 @@ extension BleViewModel: CBCentralManagerDelegate {
             if let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
                 for peripheral in peripherals {
                     if peripheral.state == .connected {
-                        self.connectedPeripherals[peripheral.identifier] = peripheral
+                        connectedPeripherals[peripheral.identifier] = peripheral
                         peripheral.delegate = self
                         
                         let name = peripheral.name ?? "Unknown Device"
                         if name.lowercased().contains("izdose") {
-                            self.addOrUpdatePeripheral(
+                            addOrUpdatePeripheral(
                                 id: peripheral.identifier,
                                 name: name,
                                 rssi: -50,
@@ -313,9 +275,8 @@ extension BleViewModel: CBCentralManagerDelegate {
                 }
             }
             
-            // Resume scanning if it was active
             if dict[CBCentralManagerRestoredStateScanServicesKey] != nil {
-                self.startScanning()
+                startScanning()
             }
         }
     }
@@ -350,10 +311,10 @@ extension BleViewModel: CBPeripheralDelegate {
         }
         
         for characteristic in characteristics {
-            // Check if this is our target characteristic for indications
             if service.uuid == targetServiceUUID && characteristic.uuid == targetCharacteristicUUID {
                 print("Found target characteristic! Enabling indications...")
                 peripheral.setNotifyValue(true, for: characteristic)
+              print(characteristic.properties.description)
             }
         }
     }
