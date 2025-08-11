@@ -46,9 +46,9 @@ class BleViewModel: NSObject, ObservableObject {
     private var discoveredPeripherals: [UUID: CBPeripheral] = [:]
     private var userDisconnectedPeripherals: Set<UUID> = []
     
-    nonisolated private let targetServiceUUID = CBUUID(string: "1ace5966-d918-451f-a7bd-b04d8533a219")
-    nonisolated private let targetCharacteristicUUID = CBUUID(string: "d8be3fb7-6244-4f13-803d-ce083fd9d89e")
-    nonisolated private let timestampFormatter: DateFormatter = {
+    private let targetServiceUUID = CBUUID(string: "1ace5966-d918-451f-a7bd-b04d8533a219")
+    private let targetCharacteristicUUID = CBUUID(string: "d8be3fb7-6244-4f13-803d-ce083fd9d89e")
+    private let timestampFormatter: DateFormatter = {
       let df = DateFormatter()
       df.locale   = Locale(identifier: "en_US_POSIX")
       df.timeZone = TimeZone(secondsFromGMT: 0)
@@ -156,37 +156,36 @@ class BleViewModel: NSObject, ObservableObject {
 }
 
 // MARK: - CBCentralManagerDelegate
-extension BleViewModel: CBCentralManagerDelegate {
-    nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        Task { @MainActor in
-            bluetoothState = central.state
+extension BleViewModel: @preconcurrency CBCentralManagerDelegate {
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+          bluetoothState = central.state
 
-            switch central.state {
-            case .poweredOn:
-                print("Bluetooth powered on")
+          switch central.state {
+          case .poweredOn:
+              print("Bluetooth powered on")
 
-            case .poweredOff:
-                showError("Bluetooth is turned off. Please enable Bluetooth in Settings.")
+          case .poweredOff:
+              showError("Bluetooth is turned off. Please enable Bluetooth in Settings.")
 
-            case .unauthorized:
-                showError("Bluetooth access denied. Please enable Bluetooth permissions in Settings.")
+          case .unauthorized:
+              showError("Bluetooth access denied. Please enable Bluetooth permissions in Settings.")
 
-            case .unsupported:
-                showError("Bluetooth Low Energy is not supported on this device.")
+          case .unsupported:
+              showError("Bluetooth Low Energy is not supported on this device.")
 
-            case .resetting:
-                print("Bluetooth is resetting. Please wait...")
+          case .resetting:
+              print("Bluetooth is resetting. Please wait...")
 
-            case .unknown:
-                showError("Bluetooth state is unknown. Please try again.")
+          case .unknown:
+              showError("Bluetooth state is unknown. Please try again.")
 
-            @unknown default:
-                showError("Unknown Bluetooth state.")
-            }
-        }
+          @unknown default:
+              showError("Unknown Bluetooth state.")
+          }
+      
     }
     
-    nonisolated func centralManager(
+    func centralManager(
         _ central: CBCentralManager,
         didDiscover peripheral: CBPeripheral,
         advertisementData: [String: Any],
@@ -194,64 +193,62 @@ extension BleViewModel: CBCentralManagerDelegate {
     ) {
         let peripheralName = peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Unknown Device"
         guard peripheralName.lowercased().contains("izdose") else { return }
-        
-        Task { @MainActor in
-            discoveredPeripherals[peripheral.identifier] = peripheral
-            
-            let state: ConnectionState = connectedPeripherals[peripheral.identifier] != nil ? .connected : .disconnected
-            addOrUpdatePeripheral(
-                id: peripheral.identifier,
-                name: peripheralName,
-                rssi: RSSI.intValue,
-                state: state
-            )
-        }
-    }
-    
-    nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        Task { @MainActor in
-            connectedPeripherals[peripheral.identifier] = peripheral
-            peripheral.delegate = self
-            updatePeripheralState(peripheral.identifier, to: .connected)
-                
-            print("Starting service discovery...")
-            peripheral.discoverServices(nil)
-        }
-    }
-    
-    nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        Task { @MainActor in
-            updatePeripheralState(peripheral.identifier, to: .disconnected)
-            let peripheralName = peripheral.name ?? "Unknown Device"
-            
-            if let error = error {
-                print("Failed to connect to \(peripheralName): \(error.localizedDescription)")
-                
-            } else {
-                print("Connection failed to \(peripheralName) with no error details")
 
-            }
-        }
+        discoveredPeripherals[peripheral.identifier] = peripheral
+        
+        let state: ConnectionState = connectedPeripherals[peripheral.identifier] != nil ? .connected : .disconnected
+        addOrUpdatePeripheral(
+            id: peripheral.identifier,
+            name: peripheralName,
+            rssi: RSSI.intValue,
+            state: state
+        )
+
     }
     
-    nonisolated func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        Task { @MainActor in
-            connectedPeripherals.removeValue(forKey: peripheral.identifier)
-            updatePeripheralState(peripheral.identifier, to: .disconnected)
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+
+        connectedPeripherals[peripheral.identifier] = peripheral
+        peripheral.delegate = self
+        updatePeripheralState(peripheral.identifier, to: .connected)
             
-            // if the device was not explicitly disconnected by the user imidietly start connection sohe system notice this when device nearby again
-            if shouldReconnect(peripheral) {
-                discoveredPeripherals[peripheral.identifier] = peripheral
-                print("Device disconnected")
-                centralManager.connect(peripheral, options: nil)
-            }
+        print("Starting service discovery...")
+        peripheral.discoverServices(nil)
+
+    }
+    
+    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+
+        updatePeripheralState(peripheral.identifier, to: .disconnected)
+        let peripheralName = peripheral.name ?? "Unknown Device"
+        
+        if let error = error {
+            print("Failed to connect to \(peripheralName): \(error.localizedDescription)")
+            
+        } else {
+            print("Connection failed to \(peripheralName) with no error details")
+
         }
+        
+    }
+    
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        connectedPeripherals.removeValue(forKey: peripheral.identifier)
+        updatePeripheralState(peripheral.identifier, to: .disconnected)
+        
+        // if the device was not explicitly disconnected by the user imidietly start connection sohe system notice this when device nearby again
+        if shouldReconnect(peripheral) {
+            discoveredPeripherals[peripheral.identifier] = peripheral
+            print("Device disconnected")
+            centralManager.connect(peripheral, options: nil)
+        }
+        
     }
 }
 
 // MARK: - CBPeripheralDelegate
-extension BleViewModel: CBPeripheralDelegate {
-    nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+extension BleViewModel: @preconcurrency CBPeripheralDelegate {
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error = error {
             print("Service discovery failed: \(error.localizedDescription)")
             return
@@ -267,7 +264,7 @@ extension BleViewModel: CBPeripheralDelegate {
         }
     }
     
-    nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let error = error {
             print("Characteristic discovery failed for service \(service.uuid): \(error.localizedDescription)")
             return
@@ -286,7 +283,7 @@ extension BleViewModel: CBPeripheralDelegate {
         }
     }
     
-    nonisolated func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
+    func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
             print("Failed to update notification state for \(characteristic.uuid): \(error.localizedDescription)")
             return
@@ -302,7 +299,7 @@ extension BleViewModel: CBPeripheralDelegate {
     }
     
     // the problem is here this delegate is ready to deal with data way too late. device already started sending indications 
-    nonisolated func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
             print("Error reading characteristic value: \(error.localizedDescription)")
             return
